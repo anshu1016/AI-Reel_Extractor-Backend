@@ -9,18 +9,12 @@ import secrets
 import hashlib
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-
+import bcrypt
 from app.core.config import settings
-
 
 # ===================================
 # PASSWORD HASHING
 # ===================================
-
-# Bcrypt context for password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
     """
@@ -30,9 +24,12 @@ def hash_password(password: str) -> str:
         password: Plain text password
         
     Returns:
-        Hashed password
+        Hashed password (as string)
     """
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -46,7 +43,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    pwd_bytes = plain_password.encode('utf-8')
+    hash_bytes = hashed_password.encode('utf-8')
+    try:
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except ValueError:
+        # Handle invalid hash format
+        return False
 
 
 def validate_password_strength(password: str) -> tuple[bool, Optional[str]]:
