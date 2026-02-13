@@ -1,0 +1,59 @@
+# Core Framework
+fastapi
+uvicorn[standard]
+gunicorn
+python-multipart
+
+# Database
+sqlalchemy
+alembic
+asyncpg
+psycopg2-binary
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+pydantic[email]
+pydantic-settings
+
+# Background Jobs
+huey
+redis
+
+# Cloud Services
+cloudinary
+requests
+
+# Email
+sendgrid
+jinja2
+
+# API Integrations
+anthropic
+httpx
+
+# Video/Audio Processing
+moviepy
+librosa
+scipy
+soundfile
+numpy
+
+# Utilities
+python-dotenv
+pytz
+validators
+
+# Monitoring & Logging
+sentry-sdk[fastapi]
+structlog
+
+# CORS
+fastapi-cors
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+faker
