@@ -23,29 +23,43 @@ logger = get_logger(__name__)
 def create_huey_instance():
     """
     Create Huey instance based on configuration.
-    Uses PostgreSQL for production, SQLite for development.
+    Uses PostgreSQL for production/shared queue, SQLite for local development.
     """
+    is_production = settings.ENVIRONMENT.lower() == "production"
     
-    if settings.HUEY_BACKEND == "postgresql" and SqlHuey and PostgresqlDatabase:
-        # Parse DATABASE_URL to get connection parameters
-        # Format: postgresql://user:password@host:port/database
+    if settings.HUEY_BACKEND == "postgresql":
+        if not SqlHuey or not PostgresqlDatabase:
+            msg = "PostgreSQL backend requested but 'peewee' or 'huey' sql dependencies missing. Please install huey[postgresql]."
+            if is_production:
+                logger.error(msg)
+                # In production, we MUST not fallback silently to local SQLite if instances are separate
+                raise ImportError(msg)
+            else:
+                logger.warning(f"{msg} Falling back to SQLite for local development.")
+                return SqliteHuey(name=settings.HUEY_NAME, filename='/tmp/huey.db', immediate=settings.HUEY_IMMEDIATE)
+
         try:
+            # Parse DATABASE_URL to get connection parameters
             parsed = urllib.parse.urlparse(settings.DATABASE_URL)
             
             # Create PEWEE database instance
+            # Note: We use psycopg2-binary which is compatible with peewee.PostgresqlDatabase
             db = PostgresqlDatabase(
-                parsed.path.lstrip('/'),  # database name
+                parsed.path.lstrip('/'),
                 host=parsed.hostname,
                 port=parsed.port or 5432,
                 user=parsed.username,
                 password=parsed.password,
+                autorollback=True,
+                # For Render/Production, SSL is usually required
+                # if "sslmode" in settings.DATABASE_URL or is_production:
+                #    connect_kwargs={'sslmode': 'require'}
             )
             
-            # Initialize Huey with SqlHuey
             huey = SqlHuey(
                 name=settings.HUEY_NAME,
                 database=db,
-                immediate=settings.HUEY_IMMEDIATE,  # Run immediately in tests
+                immediate=settings.HUEY_IMMEDIATE,
             )
             
             logger.info(
@@ -53,33 +67,21 @@ def create_huey_instance():
                 database=parsed.path.lstrip('/'),
                 host=parsed.hostname
             )
-            
             return huey
             
         except Exception as e:
             logger.error("Failed to initialize Huey with PostgreSQL", error=str(e))
-            # Fallback to SQLite for development
-            logger.warning("Falling back to SQLite for Huey")
-            return SqliteHuey(
-                name=settings.HUEY_NAME,
-                filename='/tmp/huey.db',
-                immediate=settings.HUEY_IMMEDIATE
-            )
-    
-    else:
-        # SQLite backend (development only)
-        if settings.HUEY_BACKEND == "postgresql" and not SqlHuey:
-            logger.warning("PostgreSQL backend requested but huey[postgres] dependencies missing. Using SQLite.")
+            if is_production:
+                # In production, a failed connection should stop the service rather than using a local disconnected queue
+                raise RuntimeError(f"Could not connect Huey to PostgreSQL: {str(e)}")
             
-        huey = SqliteHuey(
-            name=settings.HUEY_NAME,
-            filename='/tmp/huey.db',
-            immediate=settings.HUEY_IMMEDIATE
-        )
-        
-        logger.info("Huey initialized with SQLite")
-        
-        return huey
+            logger.warning("Falling back to SQLite for Huey local development.")
+            return SqliteHuey(name=settings.HUEY_NAME, filename='/tmp/huey.db', immediate=settings.HUEY_IMMEDIATE)
+    
+    # Default to SQLite
+    logger.info("Huey initialized with SQLite")
+    return SqliteHuey(name=settings.HUEY_NAME, filename='/tmp/huey.db', immediate=settings.HUEY_IMMEDIATE)
+
 
 
 # Create global Huey instance

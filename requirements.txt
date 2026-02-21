@@ -50,6 +50,7 @@ validators
 # Monitoring & Logging
 sentry-sdk[fastapi]
 structlog
+structlog-sentry
 
 # CORS
 fastapi-cors
